@@ -42,7 +42,7 @@
 </section>
 <section class="panel hidden" id="quiz" aria-live="polite"><div class="quiz-head"><div><div class="eyebrow" id="counter">Frage 1 von 20</div><h1 class="quiz-title" id="qtitle"></h1><div class="meta"><span class="pill" id="formation"></span><span class="pill" id="theme"></span><span class="pill" id="difficulty"></span></div></div><div class="score"><div class="tiny muted">PUNKTE</div><b id="score">0</b><div class="tiny muted">von 60</div></div></div><div class="progress"><div id="progressBar"></div></div><div class="quiz-grid"><div><div class="pitch-wrap"><svg class="pitch-svg" id="pitch" viewBox="0 0 900 520" role="img" aria-label="Fußball-Spielfeld mit blauen eigenen und roten gegnerischen Spielern"></svg><div class="pitch-labels"><span><i class="dot blue"></i>Wir</span><span><i class="dot red"></i>Gegner</span><span>⚽ Ball</span><span><i class="dot gold"></i>Laufweg (Rot: Gegenspieler)</span></div><div class="name-toggle-wrap"><label class="toggle-label" for="nameToggle"><input type="checkbox" id="nameToggle"/> <span class="toggle-track" aria-hidden="true"></span> <span>Namen auf dem Feld anzeigen</span></label></div></div><div class="pitch-hint">Links steht euer Tor. Ihr greift nach rechts an. Blau = eure Spieler. TW = Torwart. Keine Abseitsregel.</div></div><div><div class="scenario" id="situation"></div><h2 class="question" id="question"></h2><div class="choices" id="choices"></div><div id="feedback" class="feedback hidden"></div></div></div><div class="controls"><button class="secondary" id="backBtn">← Zurück</button><div class="right"><button class="secondary" id="homeBtn">Übersicht</button><button class="primary" disabled id="nextBtn">Weiter →</button></div></div></section>
 <section class="panel hidden" id="result"><div class="result"><div class="eyebrow">Geschafft!</div><div class="medal" id="medal">🏅</div><h1 id="resultTitle">Richtig gut gespielt!</h1><div class="big" id="finalScore">0 / 60</div><p id="resultCopy"></p><div class="result-grid"><div><b id="strongCount">0</b>Top-Lösungen</div><div><b id="goodCount">0</b>Gute Ideen</div><div><b>20</b>Challenges</div></div><button class="primary" id="restartBtn">Noch einmal spielen ↻</button><div class="review"><h2>Deine Entscheidungen ansehen</h2><div id="reviewList"></div></div></div></section>
-<footer class="foot">Ohne Anmeldung oder Werbung. Dein Spielstand bleibt im Browser dieses Geräts. Das Vereinslogo wird bei Internetverbindung von der Vereinswebseite geladen. Trainingsideen statt starrer Fußballgesetze – auf dem Platz können auch andere Lösungen passen. <a href="https://foerderkader.de/mannschaft/e1-junioren-u11-2/" target="_blank" rel="noopener noreferrer">Zur U11-Mannschaft</a></footer>
+<footer class="foot">Ohne Anmeldung oder Werbung. Dein Spielstand bleibt im Browser dieses Geräts. Trainingsideen statt starrer Fußballgesetze – auf dem Platz können auch andere Lösungen passen. <a href="https://foerderkader.de/mannschaft/e1-junioren-u11-2/" target="_blank" rel="noopener noreferrer">Zur U11-Mannschaft</a></footer>
 </div>
 <script>
 'use strict';
@@ -52,9 +52,33 @@ const storageKey='foerderkader_u11_v3';
 const childNames=["Abdul", "Benedict", "Egon", "Emilian", "Floris", "Fritz", "Gustav", "Hennrik", "Henry", "Julius", "Lino", "Niklas", "Oliver", "Oskar", "Till", "Vincent", "Edgar", "Matti", "Tomke"];
 let showNames=false;
 const letters=['A','B','C','D'];
+// New balanced random allocation when a fresh quiz starts.
+// Every one of the 19 children appears and no name repeats within one question.
+function buildNameAssignments(){
+ const appearances=Object.fromEntries(childNames.map(name=>[name,0]));
+ return questions.map(q=>{
+  const usedInQuestion=new Set();
+  return q.blue.map(()=>{
+   const available=childNames.filter(name=>!usedInQuestion.has(name));
+   const minimum=Math.min(...available.map(name=>appearances[name]));
+   const candidates=available.filter(name=>appearances[name]===minimum);
+   const chosen=candidates[Math.floor(Math.random()*candidates.length)];
+   usedInQuestion.add(chosen);
+   appearances[chosen]++;
+   return chosen;
+  });
+ });
+}
+function validNameAssignments(value){
+ return Array.isArray(value)&&value.length===questions.length&&
+  value.every((names,i)=>Array.isArray(names)&&names.length===questions[i].blue.length&&
+   new Set(names).size===names.length&&names.every(name=>childNames.includes(name)))&&
+  childNames.every(name=>value.some(names=>names.includes(name)));
+}
 let answers=Array(questions.length).fill(null), idx=0;
-try{const saved=JSON.parse(localStorage.getItem(storageKey)||'null');if(saved && Array.isArray(saved.answers)&&saved.answers.length===questions.length){answers=saved.answers.map((v,i)=>Number.isInteger(v)&&v>=0&&v<4?v:null);idx=Number.isInteger(saved.idx)?Math.max(0,Math.min(saved.idx,questions.length-1)):0;el('resumeBtn').classList.remove('hidden');}}catch(e){}
-function save(){try{localStorage.setItem(storageKey,JSON.stringify({answers,idx}));}catch(e){}}
+let nameAssignments=buildNameAssignments();
+try{const saved=JSON.parse(localStorage.getItem(storageKey)||'null');if(saved && Array.isArray(saved.answers)&&saved.answers.length===questions.length){answers=saved.answers.map((v,i)=>Number.isInteger(v)&&v>=0&&v<4?v:null);idx=Number.isInteger(saved.idx)?Math.max(0,Math.min(saved.idx,questions.length-1)):0;if(validNameAssignments(saved.nameAssignments))nameAssignments=saved.nameAssignments;el('resumeBtn').classList.remove('hidden');}}catch(e){}
+function save(){try{localStorage.setItem(storageKey,JSON.stringify({answers,idx,nameAssignments}));}catch(e){}}
 function total(){return answers.reduce((sum,a,i)=>sum+(a===null?0:questions[i].options[a].points),0)}
 function mapx(x){return 45+x*8.1}function mapy(y){return 40+y*7.333333}
 function s(node,attrs,text){const e=document.createElementNS('http://www.w3.org/2000/svg',node);for(const [k,v] of Object.entries(attrs||{})){e.setAttribute(k,v)}if(text!==undefined)e.textContent=text;return e;}
@@ -63,8 +87,7 @@ function playerCoords(q,team,id){if(team==='blau'){const p=q.blue.find(p=>String
 function getPlayerName(q, playerId){
  const questionNumber=questions.indexOf(q);
  const pos=q.blue.findIndex(p=>String(p[0])===String(playerId));
- // Deterministic rotation for variety. No child owns any particular position.
- return childNames[(questionNumber*7+(pos*3)+2)%childNames.length];
+ return nameAssignments[questionNumber][pos];
 }
 function draw(q){const svg=el('pitch');svg.replaceChildren();const defs=append(svg,'defs');let g=append(defs,'linearGradient',{id:'grass',x1:'0%',y1:'0%',x2:'100%',y2:'100%'});append(g,'stop',{offset:'0%', 'stop-color':'#338852'});append(g,'stop',{offset:'100%','stop-color':'#236b46'});const shadow=append(defs,'filter',{id:'sh',x:'-50%',y:'-50%',width:'200%',height:'200%'});append(shadow,'feDropShadow',{dx:0,dy:2,stdDeviation:2,'flood-opacity':'.27'});const arrow=append(defs,'marker',{id:'runner',markerWidth:8,markerHeight:8,refX:7,refY:3,orient:'auto',markerUnits:'userSpaceOnUse'});append(arrow,'path',{d:'M0,0 L7,3 L0,6 Z',fill:'#ffe586'});const redArrow=append(defs,'marker',{id:'red-runner',markerWidth:8,markerHeight:8,refX:7,refY:3,orient:'auto',markerUnits:'userSpaceOnUse'});append(redArrow,'path',{d:'M0,0 L7,3 L0,6 Z',fill:'#ffada0'});
 append(svg,'rect',{width:900,height:520,rx:12,fill:'url(#grass)'});
@@ -81,7 +104,7 @@ const cp=playerCoords(q,q.ball[0],q.ball[1]);if(cp){let bx=cp[0]+23,by=cp[1]+18;
 svg.setAttribute('aria-label',`Spielfeld: eigenes Tor links, Angriff nach rechts. Ball bei ${q.ball[0]==='blau'?'unserer Mannschaft':'den Gegnern'}. ${q.situation}`);
 }
 function show(id){for(const k of ['home','quiz','result'])el(k).classList.toggle('hidden',k!==id);window.scrollTo({top:0,behavior:'instant'});}
-function start(continueGame){if(!continueGame){answers=Array(questions.length).fill(null);idx=0;save()}render();show('quiz')}
+function start(continueGame){if(!continueGame){nameAssignments=buildNameAssignments();answers=Array(questions.length).fill(null);idx=0;save()}render();show('quiz')}
 function render(){const q=questions[idx],answer=answers[idx],t=total();el('counter').textContent=`FRAGE ${idx+1} VON ${questions.length}`;el('qtitle').textContent=q.title;el('formation').textContent=q.formation+(q.shape?' · '+q.shape:'');el('theme').textContent=q.theme;el('difficulty').textContent='Level '+q.level;el('score').textContent=t;el('progressBar').style.width=(idx+1)/questions.length*100+'%';el('situation').textContent=q.situation;el('question').textContent=q.question;draw(q);const ch=el('choices');ch.replaceChildren();q.options.forEach((o,n)=>{const btn=document.createElement('button');btn.type='button';btn.className='option'+(answer===n?' selected':answer!==null?' locked':'');btn.disabled=answer!==null;btn.setAttribute('aria-label',`Antwort ${letters[n]}: ${o.text}`);const letter=document.createElement('span');letter.className='letter';letter.textContent=letters[n];const tx=document.createElement('span');tx.textContent=o.text;btn.append(letter,tx);btn.addEventListener('click',()=>{if(answers[idx]!==null)return;answers[idx]=n;save();render();});ch.appendChild(btn)});
 const fb=el('feedback');fb.className='feedback';if(answer===null){fb.classList.add('hidden')}else{const o=q.options[answer];if(o.points===2)fb.classList.add('partial');if(o.points<=1)fb.classList.add('low');fb.replaceChildren();const head=document.createElement('div');head.className='feedback-head';const msg=document.createElement('span');msg.textContent=o.points===3?'Clever entschieden!':o.points===2?'Das ist eine gute Überlegung!':o.points===1?'Eine Idee – denk noch etwas weiter.':'Probier beim nächsten Mal einen anderen Weg.';const pts=document.createElement('span');pts.className='points';pts.textContent=`+${o.points} / 3`;head.append(msg,pts);const why=document.createElement('div');why.textContent=o.feedback;const note=document.createElement('div');note.className='takehome';note.textContent='Merke: '+q.takehome;fb.append(head,why,note)}
 el('backBtn').disabled=idx===0;el('nextBtn').disabled=answer===null;el('nextBtn').textContent=idx===questions.length-1?'Ergebnis ansehen →':'Weiter →';}
